@@ -21,11 +21,11 @@
     color: #fff;
     display: flex;
     justify-content: center;
-    align-items: center;
+   
     flex-direction: column;
   }
 
-  .navbar {
+  .navbar1 {
     position: fixed;
     top: 0;
     left: 0;
@@ -37,7 +37,7 @@
     z-index: 1000;
   }
 
-  .navbar .value {
+  .navbar1 .value {
     font-size: 15px;
     background-color: transparent;
     border: none;
@@ -52,20 +52,20 @@
     box-sizing: border-box;
   }
 
-  .navbar .value:not(:active):hover,
-  .navbar .value:focus {
+  .navbar1 .value:not(:active):hover,
+  .navbar1 .value:focus {
     border: 2px solid #1a1f24;
     color: #637185;
   }
 
-  .navbar .value:focus,
-  .navbar .value:active {
+  .navbar1 .value:focus,
+  .navbar1 .value:active {
     background-color: #1a1f24;
     outline: none;
     margin-left: 17px;
   }
 
-  .navbar .value::before {
+  .navbar1 .value::before {
     content: "";
     position: absolute;
     top: 5px;
@@ -78,16 +78,16 @@
     transition: 1s;
   }
 
-  .navbar .value:focus::before,
-  .navbar .value:active::before {
+  .navbar1 .value:focus::before,
+  .navbar1 .value:active::before {
     opacity: 1;
   }
 
-  .navbar .value svg {
+  .navbar1 .value svg {
     width: 20px;
   }
 
-  .navbar:hover > :not(.value:hover) {
+  .navbar1:hover > :not(.value:hover) {
     transition: 300ms;
     filter: blur(1.5px);
     transform: scale(0.95);
@@ -128,7 +128,7 @@
 <body>
   <div class="class1">
     <div class="Nav">
-      <div class="navbar">
+      <div class="navbar1">
         <button class="value">
           <svg data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
             <path d="M1.5 13v1a.5.5 0 0 0 .3379.4731A18.9718 18.9718 0 0 0 8 15.5a18.9629 18.9629 0 0 0 6.1621-1.0269.5.5 0 0 0 .3379-.4731v-1a6.5083 6.5083 0 0 0-4.461-6.1676 3.5 3.5 0 1 0-4.078 0A6.5083 6.5083 0 0 0 1.5 13zm4-9a2.5 2.5 0 1 1 2.5 2.5A2.5026 2.5026 0 0 1 5.5 4zm2.5 3.5a5.5066 5.5066 0 0 1 5.5 5.5v.6392a18.08 18.08 0 0 1-11 0v-.6392A5.5066 5.5066 0 0 1 8 7.5z" fill="#7D8590"></path>

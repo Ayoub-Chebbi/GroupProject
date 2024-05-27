@@ -140,7 +140,7 @@
   }
   
   .formCo label input.inputrg,
-  .formCo label select.inputrg { /* Apply the same styles to select */
+  .formCo label textarea.inputrg { /* Apply the same styles to select */
     background-color: #333;
     color: #fff;
     width: 100%; /* Make the select element the same width as input */
@@ -152,7 +152,7 @@
   }
   
   .formCo label input.inputrg:focus,
-  .formCo label select.inputrg:focus { /* Apply focus style to select */
+  .formCo label textarea.inputrg:focus { /* Apply focus style to select */
     border-color: #00bfff;
   }
   
@@ -168,13 +168,13 @@
   }
   
   .formCo label input.inputrg::placeholder,
-  .formCo label select.inputrg::placeholder { /* Apply placeholder style to select */
+  .formCo label select.textarea::placeholder { /* Apply placeholder style to select */
     color: rgba(255, 255, 255, 0.5);
   }
   
   .formCo label input.inputrg:focus + span,
   .formCo label input.inputrg:valid + span,
-  .formCo label select.inputrg:focus + span,
+  .formCo label textarea.inputrg:focus + span,
   .formCo label select.inputrg:valid + span { /* Apply focus style to select */
     color: #00bfff;
     top: 0;
@@ -339,7 +339,7 @@
                             <h1>Edit Course Form</h1>
                             <label for="userId">Name:
                                   <form:errors path="name" class="text-danger"/>
-                                  <form:input class="form-control" path="name" value="${course.name}" placeholder="Course Name"/>
+                                  <form:input class="inputrg" path="name" value="${course.name}" placeholder="Course Name"/>
                                 
                             </label>
 
@@ -350,7 +350,7 @@
 
                             <label for="courseId">Description:
                                   <form:errors path="description" class="text-danger"/>
-                                  <form:textarea class="form-control" path="description" placeholder="Description"/>
+                                  <form:textarea class="inputrg" path="description" placeholder="Description"/>
                                 
                             </label>
 
