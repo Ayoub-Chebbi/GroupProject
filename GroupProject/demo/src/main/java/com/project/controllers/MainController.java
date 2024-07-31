@@ -1,30 +1,24 @@
 package com.project.controllers;
 
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 import com.project.models.Course;
 import com.project.models.LoginUser;
 import com.project.models.Role;
 import com.project.models.User;
 import com.project.services.CourseService;
 import com.project.services.UserService;
-
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 
-@Controller
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api")
 public class MainController {
 
     @Autowired
@@ -38,346 +32,171 @@ public class MainController {
         return userId != null;
     }
 
-    @GetMapping("/")
-    public String showUserForm(Model model) {
-        model.addAttribute("newUser", new User());
-        model.addAttribute("newLogin", new LoginUser());
-        return "login.jsp";
+    private boolean hasInstructorRole(HttpSession session) {
+        List<String> roles = (List<String>) session.getAttribute("roles");
+        return roles != null && roles.contains("INSTRUCTOR");
     }
 
-    @GetMapping("/register")
-    public String showRegistrationForm(Model model,HttpSession session) {
-    	if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
+    @PostMapping("/user/login")
+    public ResponseEntity<?> loginUser(@Valid @RequestBody LoginUser loginUser, HttpSession session) {
+        User user = userService.login(loginUser);
+        if (user == null) {
+            return new ResponseEntity<>("Invalid login credentials", HttpStatus.UNAUTHORIZED);
         }
-    	if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
+
+        session.setAttribute("userId", user.getId());
+        Set<Role> rolesSet = user.getRoles();
+        List<String> rolesList = rolesSet.stream()
+                                         .map(Role::name)
+                                         .collect(Collectors.toList());
+        session.setAttribute("roles", rolesList);
+        
+        String redirectUrl;
+        if (user.getRoles().contains(Role.INSTRUCTOR)) {
+            redirectUrl = "/api/courses/all";
+        } else if (user.getRoles().contains(Role.STUDENT)) {
+            redirectUrl = "/api/student/courses";
+        } else {
+            return new ResponseEntity<>("User has no valid roles.", HttpStatus.FORBIDDEN);
         }
-        model.addAttribute("newUser", new User());
-        return "register.jsp";
+
+        return new ResponseEntity<>(redirectUrl, HttpStatus.OK);
     }
 
     @PostMapping("/user/register")
-    public String registerUser(@Valid @ModelAttribute("newUser") User newUser, BindingResult result, Model model) {
-        if (result.hasErrors()) {
-            return "register.jsp";
-        }
-
+    public ResponseEntity<?> registerUser(@Valid @RequestBody User newUser) {
         if (newUser.getRoles() == null || newUser.getRoles().isEmpty()) {
             newUser.getRoles().add(Role.STUDENT);
         } else {
             newUser.getRoles().add(Role.INSTRUCTOR);
         }
 
-        User registeredUser = userService.register(newUser, result);
+        User registeredUser = userService.register(newUser);
         if (registeredUser == null) {
-            return "register.jsp";
+            return new ResponseEntity<>("Registration failed", HttpStatus.BAD_REQUEST);
         }
 
-        model.addAttribute("newUser", new User());
-        model.addAttribute("newLogin", new LoginUser());
-        model.addAttribute("successMessage", "Registration successful!");
-        return "redirect:/api/courses/all";
+        return new ResponseEntity<>("Registration successful!", HttpStatus.CREATED);
     }
 
-    @GetMapping("/api/users/{id}/edit")
-    public String showEditUserForm(@PathVariable("id") Long id, Model model, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
-        }
+    @GetMapping("/users/{id}")
+    public ResponseEntity<?> getUser(@PathVariable("id") Long id) {
         User user = userService.findById(id);
         if (user == null) {
-            return "error.jsp"; // Handle user not found error
+            return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
         }
-        model.addAttribute("user", user);
-        return "edit_user.jsp";
+        return new ResponseEntity<>(user, HttpStatus.OK);
     }
 
-    @PostMapping("/api/users/{id}/edit")
-    public String updateUser(@PathVariable("id") Long id, 
-                             @Valid @ModelAttribute("user") User user, 
-                             BindingResult bindingResult, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        if (bindingResult.hasErrors()) {
-            return "edit_user.jsp"; // Return to the form page with errors displayed
-        }
+    @PutMapping("/users/{id}")
+    public ResponseEntity<?> updateUser(@PathVariable("id") Long id, @Valid @RequestBody User user) {
         user.setId(id);
-        userService.saveUser(user);
-        return "redirect:/api/users/all";
+        User updatedUser = userService.saveUser(user);
+        if (updatedUser == null) {
+            return new ResponseEntity<>("User update failed", HttpStatus.BAD_REQUEST);
+        }
+        return new ResponseEntity<>(updatedUser, HttpStatus.OK);
     }
 
-    @GetMapping("/api/users/{id}/delete")
-    public String deleteUser(@PathVariable("id") Long id, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
-        }
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<?> deleteUser(@PathVariable("id") Long id) {
         userService.deleteUser(id);
-        return "redirect:/api/users/all";
+        return new ResponseEntity<>("User deleted", HttpStatus.NO_CONTENT);
     }
 
-    
-    @GetMapping("/api/users/all")
-    public String showAllUsers(Model model, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
-        }
-        
+    @GetMapping("/users")
+    public ResponseEntity<List<User>> getAllUsers() {
         List<User> users = userService.getAllUsers();
-        model.addAttribute("users", users);
-        return "all_users.jsp";
+        return new ResponseEntity<>(users, HttpStatus.OK);
     }
 
-
-    @PostMapping("/user/login")
-    public String loginUser(@Valid @ModelAttribute("newLogin") LoginUser loginUser, BindingResult result, Model model, HttpSession session) {
-        if (result.hasErrors()) {
-            model.addAttribute("newUser", new User());
-            return "login.jsp";
+    @PostMapping("/courses")
+    public ResponseEntity<?> saveCourse(@Valid @RequestBody Course course, HttpSession session) {
+        if (!isLoggedIn(session) || !hasInstructorRole(session)) {
+            return new ResponseEntity<>("Unauthorized", HttpStatus.FORBIDDEN);
         }
 
-        User user = userService.login(loginUser, result);
-        if (user == null) {
-            model.addAttribute("newUser", new User());
-            return "login.jsp";
-        }
-
-        session.setAttribute("userId", user.getId());
-        Set<Role> rolesSet = user.getRoles(); // Assuming user.getRoles() returns a Set<Role>
-        List<String> rolesList = rolesSet.stream()
-                                         .map(Role::name) // Assuming Role is an enum
-                                         .collect(Collectors.toList());
-        session.setAttribute("roles", rolesList);
-        String redirectUrl;
-        if (user.getRoles().contains(Role.INSTRUCTOR)) {
-            redirectUrl = "redirect:/api/courses/all";
-        } else if (user.getRoles().contains(Role.STUDENT)) {
-            redirectUrl = "redirect:/student/courses";
-        } else {
-            model.addAttribute("newUser", new User());
-            model.addAttribute("errors", "User has no valid roles.");
-            return "login.jsp";
-        }
-
-        return redirectUrl;
-    }
-    
-    @GetMapping("/api/users2/{id}/edit")
-    public String showEditUserForm1(@PathVariable("id") Long id, Model model, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        
-        User user = userService.findById(id);
-        if (user == null) {
-          return  "redirect:/login";
-        }
-        
-
-        if (!user.getRoles().contains(Role.INSTRUCTOR)) {
-            return "redirect:/error.jsp";
-        }
-        
-        model.addAttribute("user", user);
-        return "edit_user.jsp";
-    }
-
-    
-    private boolean hasInstructorRole(HttpSession session) {
-    	List<String> roles = (List<String>) session.getAttribute("roles");
-        return roles != null && roles.contains("INSTRUCTOR");
-    }
-    
-	@GetMapping("/logout")
-    public String logout(HttpSession session) {
-        session.invalidate(); // Invalidate the session to log out the user
-        return "redirect:/"; // Redirect to the login page or home page
-    }
-
-    @GetMapping("/api/courses/new")
-    public String showNewCourseForm(Model model , HttpSession session) {
-    	if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-    	if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
-        }
-        model.addAttribute("course", new Course());
-        return "new_course.jsp";
-    }
-
-    @PostMapping("/api/courses/new")
-    public String saveCourse(@Valid @ModelAttribute("course") Course course,
-                             BindingResult bindingResult, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/";
-        }
-        if (bindingResult.hasErrors()) {
-            return "new_course.jsp"; // Return to the form page with errors displayed
-        }
         User instructor = userService.findById((Long) session.getAttribute("userId"));
         course.setInstructor(instructor);
         courseService.saveCourse(course);
-        return "redirect:/api/courses/all";
+        return new ResponseEntity<>(course, HttpStatus.CREATED);
     }
 
-    
-    @GetMapping("/api/courses/{id}/edit")
-    public String showEditCourseForm(@PathVariable("id") Long id, Model model, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
-        }
-        Course course = courseService.getCourseById(id).orElse(null);
-        if (course == null) {
-            // Handle course not found error
-            return "error.jsp";
-        }
-        model.addAttribute("course", course);
-        return "edit_course.jsp";
-    }
-
-    @PostMapping("/api/courses/{id}/edit")
-    public String updateCourse(@PathVariable("id") Long id,
-                               @Valid @ModelAttribute("course") Course course,
-                               BindingResult bindingResult, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        if (bindingResult.hasErrors()) {
-            return "edit_course.jsp"; // Return to the form page with errors displayed
-        }
+    @PutMapping("/courses/{id}")
+    public ResponseEntity<?> updateCourse(@PathVariable("id") Long id, @Valid @RequestBody Course course) {
         course.setId(id);
-        courseService.saveCourse(course);
-        return "redirect:/api/courses/all";
+        Course updatedCourse = courseService.saveCourse(course);
+        if (updatedCourse == null) {
+            return new ResponseEntity<>("Course update failed", HttpStatus.BAD_REQUEST);
+        }
+        return new ResponseEntity<>(updatedCourse, HttpStatus.OK);
     }
 
-    @GetMapping("/api/courses/{id}/delete")
-    public String deleteCourse(@PathVariable("id") Long id, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
-        }
+    @DeleteMapping("/courses/{id}")
+    public ResponseEntity<?> deleteCourse(@PathVariable("id") Long id) {
         courseService.deleteCourse(id);
-        return "redirect:/api/courses/all";
+        return new ResponseEntity<>("Course deleted", HttpStatus.NO_CONTENT);
     }
 
-    @GetMapping("/api/courses/{id}")
-    public String showCourseDetails(@PathVariable("id") Long id, Model model, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
-        }
+    @GetMapping("/courses")
+    public ResponseEntity<List<Course>> getAllCourses() {
+        List<Course> courses = courseService.getAllCourses();
+        return new ResponseEntity<>(courses, HttpStatus.OK);
+    }
+
+    @GetMapping("/courses/{id}")
+    public ResponseEntity<?> getCourseDetails(@PathVariable("id") Long id) {
         Course course = courseService.getCourseById(id).orElse(null);
         if (course == null) {
-            // Handle course not found error
-            return "error.jsp";
+            return new ResponseEntity<>("Course not found", HttpStatus.NOT_FOUND);
         }
-        model.addAttribute("course", course);
-        return "show_course_details.jsp";
+        return new ResponseEntity<>(course, HttpStatus.OK);
     }
 
-    @GetMapping("/api/courses/all")
-    public String getAllCourses(Model model, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/login.jsp"; // Redirect to login page if user not logged in
-        }
-        System.out.print(hasInstructorRole(session));
-        if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
-        }
-        List<Course> courses = courseService.getAllCourses();
-        model.addAttribute("courses", courses);
-        return "all_courses.jsp";
-    }
-
-    @GetMapping("/api/instructor/add-course-to-user")
-    public String showAddCourseToUserForm(Model model, HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/";
-        }
-        if (!hasInstructorRole(session)) {
-            return "error.jsp"; // Redirect to error page if user doesn't have instructor role
-        }
-        List<User> users = userService.getAllUsers();
-        List<Course> courses = courseService.getAllCourses();
-        model.addAttribute("users", users);
-        model.addAttribute("courses", courses);
-        return "add_course_to_user.jsp";
-    }
-
-    @PostMapping("/api/instructor/add-course-to-user")
-    public String addCourseToUser(@RequestParam("userId") Long userId,
-                                  @RequestParam("courseId") Long courseId,
-                                  HttpSession session) {
-        if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
+    @PostMapping("/instructor/add-course-to-user")
+    public ResponseEntity<?> addCourseToUser(@RequestParam("userId") Long userId,
+                                              @RequestParam("courseId") Long courseId, HttpSession session) {
+        if (!isLoggedIn(session) || !hasInstructorRole(session)) {
+            return new ResponseEntity<>("Unauthorized", HttpStatus.FORBIDDEN);
         }
 
         User user = userService.findById(userId);
         Course course = courseService.findById(courseId);
 
         if (user == null || course == null) {
-            return "error.jsp";
+            return new ResponseEntity<>("User or course not found", HttpStatus.NOT_FOUND);
         }
 
         user.getCourses().add(course);
         userService.saveUser(user);
-
-        return "redirect:/api/courses/all";
+        return new ResponseEntity<>("Course added to user", HttpStatus.OK);
     }
 
     @GetMapping("/student/courses")
-    public String showStudentCourses(Model model, HttpSession session) {
+    public ResponseEntity<?> getStudentCourses(HttpSession session) {
         if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
+            return new ResponseEntity<>("Unauthorized", HttpStatus.FORBIDDEN);
         }
 
         User student = userService.findById((Long) session.getAttribute("userId"));
         if (student == null || !student.getRoles().contains(Role.STUDENT)) {
-            // Handle case where user is not found or is not a student
-            return "error.jsp";
+            return new ResponseEntity<>("User is not a student", HttpStatus.FORBIDDEN);
         }
 
         List<Course> courses = student.getCourses();
-        model.addAttribute("courses", courses);
-        model.addAttribute("user", student); // Add the user to the model
-        return "student_courses.jsp";
+        return new ResponseEntity<>(courses, HttpStatus.OK);
     }
 
-    @PostMapping("/student/update")
-    public String updateStudent(@Valid @ModelAttribute("user") User user, 
-                                BindingResult bindingResult, HttpSession session, Model model) {
+    @PutMapping("/student/update")
+    public ResponseEntity<?> updateStudent(@Valid @RequestBody User user, HttpSession session) {
         if (!isLoggedIn(session)) {
-            return "redirect:/"; // Redirect to login page if user not logged in
-        }
-        if (bindingResult.hasErrors()) {
-            // Return to the form page with errors displayed
-            return "student_courses.jsp";
+            return new ResponseEntity<>("Unauthorized", HttpStatus.FORBIDDEN);
         }
 
-        // Update the student information
         Long userId = (Long) session.getAttribute("userId");
         User existingUser = userService.findById(userId);
         if (existingUser == null) {
-            // Handle case where user is not found
-            return "error.jsp";
+            return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
         }
 
         existingUser.setUsername(user.getUsername());
@@ -387,6 +206,12 @@ public class MainController {
         }
 
         userService.saveUser(existingUser);
-        return "redirect:/student/courses";
+        return new ResponseEntity<>("Student updated", HttpStatus.OK);
+    }
+
+    @GetMapping("/logout")
+    public ResponseEntity<?> logout(HttpSession session) {
+        session.invalidate();
+        return new ResponseEntity<>("Logged out successfully", HttpStatus.OK);
     }
 }
